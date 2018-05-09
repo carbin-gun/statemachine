@@ -33,6 +33,14 @@ type TransitionError struct {
 	current State
 }
 
+func NewTransitionError(cause error, event Event, currentState State) *TransitionError {
+	return &TransitionError{
+		cause:   cause,
+		event:   event,
+		current: currentState,
+	}
+}
+
 func (e *TransitionError) Error() string {
 	return fmt.Sprintf("statemachine transition error: current state [%s] event [%s] but error:%v happened", e.current, e.event, e.cause)
 }
