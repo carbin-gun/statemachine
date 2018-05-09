@@ -9,10 +9,10 @@ type State string
 type Event string
 
 type Transition struct {
-	From  State
-	To    State
-	Event Event
-	Handler
+	From      State
+	To        State
+	Event     Event
+	Processor EventProcessor
 }
 
 type EventProcessor interface {
@@ -24,35 +24,30 @@ type EventProcessor interface {
 	OnEnter(toState State, ctx ContextData) Error
 }
 
-type Delegate interface {
-	HandleEvent(event Event, fromState, toState State) Error
-}
-
-type DefaultDelegate struct {
-	P EventProcessor
-}
-
-func (d *DefaultDelegate) HandleEvent(event Event, fromState, toState State, ctx ContextData) Error {
-	if fromState != toState {
-		if err := d.P.OnExit(fromState, ctx); err != nil {
-			return err
-		}
-	}
-	if err := d.P.OnEvent(event, fromState, toState, ctx); err != nil {
+func FlowTemplate(t *Transition, ctx ContextData) Error {
+	var err Error
+	if err = t.Processor.OnExit(t.From, ctx); err != nil {
 		return err
 	}
-	if fromState != toState {
-		if err := d.P.OnEnter(toState, ctx); err != nil {
-			return err
-		}
+	if err = t.Processor.OnEvent(t.Event, t.From, t.To, ctx); err != nil {
+		return err
+	}
+	if err = t.Processor.OnEnter(t.To, ctx); err != nil {
+		return err
 	}
 	return nil
 }
 
 type StateMachine struct {
 	Name        string
-	Delegate    Delegate
 	Transitions []*Transition
+}
+
+func NewStateMachine(name string, transitions []*Transition) *StateMachine {
+	return &StateMachine{
+		Name:        name,
+		Transitions: transitions,
+	}
 }
 
 func (m *StateMachine) Trigger(current State, event Event, ctx ContextData) Error {
@@ -60,7 +55,7 @@ func (m *StateMachine) Trigger(current State, event Event, ctx ContextData) Erro
 	if transition == nil {
 		return &noTransitionError{event: event, currentState: current}
 	}
-	return m.Delegate.HandleEvent(event, current, transition.To)
+	return FlowTemplate(transition, ctx)
 }
 
 func (m *StateMachine) Find(from State, Event Event) *Transition {
