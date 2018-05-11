@@ -2,51 +2,83 @@ package statemachine
 
 import "fmt"
 
-//Error is an error when processing event and state changing
+type ErrorCode uint8
+
+const (
+	NoTransition    ErrorCode = iota
+	LockerError
+	TransitionError
+)
+
 type Error interface {
 	error
-	Event() string
 	CurrentState() string
+	Event() string
+	Code() ErrorCode
 }
-
-var _ Error = new(noTransitionError)
-
 type noTransitionError struct {
-	event        Event
-	currentState State
+	statemachine string
+	event        string
+	currentState string
 }
 
 func (e *noTransitionError) Error() string {
-	return fmt.Sprintf("statemachine error: no transition for event [%s] at current state [%s]", e.event, e.currentState)
+	return fmt.Sprintf("statemachine transition error:  statemachine [%s]no transition for event [%s] at current state [%s]", e.statemachine, e.event, e.currentState)
 }
 
-func (e *noTransitionError) Event() string {
-	return string(e.event)
-}
 func (e *noTransitionError) CurrentState() string {
-	return string(e.currentState)
+	return e.currentState
+}
+func (e *noTransitionError) Event() string {
+	return e.event
+}
+func (e *noTransitionError) Code() ErrorCode {
+	return NoTransition
 }
 
-type TransitionError struct {
+type statemachineLockerError struct {
+	locker Locker
+	cause  error
+	event  string
+}
+
+func (e *statemachineLockerError) Error() string {
+	return fmt.Sprintf("statemachine lock error,locker:%v,event:%v,error:%v", e.locker, e.event, e.cause)
+}
+func (e *statemachineLockerError) CurrentState() string {
+	return "unknown"
+}
+func (e *statemachineLockerError) Event() string {
+	return e.event
+}
+func (e *statemachineLockerError) Code() ErrorCode {
+	return LockerError
+}
+
+type transitionError struct {
 	cause   error
-	event   Event
-	current State
+	event   string
+	current string
 }
 
-func NewTransitionError(cause error, event Event, currentState State) *TransitionError {
-	return &TransitionError{
+func NewTransitionError(cause error, event string, currentState string) Error {
+	return &transitionError{
 		cause:   cause,
 		event:   event,
 		current: currentState,
 	}
 }
 
-func (e *TransitionError) Error() string {
+func (e *transitionError) Error() string {
 	return fmt.Sprintf("statemachine transition error: current state [%s] event [%s] but error:%v happened", e.current, e.event, e.cause)
 }
-func (e *TransitionError) Event() string {
-	return string(e.event)
+
+func (e *transitionError) CurrentState() string {
+	return e.current
 }
-func (e *TransitionError) CurrentState() string {
-	return string(e.current)
+func (e *transitionError) Event() string {
+	return e.event
+}
+func (e *transitionError) Code() ErrorCode {
+	return TransitionError
 }
